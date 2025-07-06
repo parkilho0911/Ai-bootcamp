@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Head Soccer Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #2c3e50;
+        }
+        #game-container {
+            width: 800px;
+            height: 600px;
+            position: relative;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 300 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        let player;
+        let ball;
+        let cursors;
+        let score = 0;
+        let scoreText;
+        let goals;
+
+        function preload() {
+            // 임시 에셋 로드
+            this.load.rectangle('player', 32, 48, 0x00ff00);
+            this.load.circle('ball', 16, 0xffffff);
+            this.load.rectangle('goal', 20, 100, 0xff0000);
+        }
+
+        function create() {
+            // 배경 설정
+            this.add.rectangle(400, 300, 800, 600, 0x87CEEB); // 하늘색 배경
+            this.add.rectangle(400, 550, 800, 100, 0x90EE90); // 잔디색 바닥
+            
+            // 관중석 (간단한 패턴)
+            for(let i = 0; i < 10; i++) {
+                this.add.rectangle(80 * i, 50, 60, 30, 0xDDDDDD);
+            }
+
+            // 플레이어 생성
+            player = this.add.rectangle(100, 500, 32, 48, 0x00ff00);
+            this.physics.add.existing(player);
+            player.body.setCollideWorldBounds(true);
+
+            // 공 생성
+            ball = this.add.circle(400, 300, 16, 0xffffff);
+            this.physics.add.existing(ball);
+            ball.body.setCollideWorldBounds(true);
+            ball.body.setBounce(0.6);
+            ball.body.setDrag(50);
+
+            // 골대 생성
+            goals = this.physics.add.staticGroup();
+            goals.create(780, 500, 'goal');
+
+            // 점수 표시
+            scoreText = this.add.text(16, 16, 'Score: 0', { 
+                fontSize: '32px', 
+                fill: '#fff',
+                stroke: '#000',
+                strokeThickness: 4
+            });
+
+            // 키보드 컨트롤 설정
+            cursors = this.input.keyboard.createCursorKeys();
+            
+            // 충돌 설정
+            this.physics.add.collider(player, ball);
+            this.physics.add.overlap(ball, goals, goalScored, null, this);
+        }
+
+        function update() {
+            // 플레이어 이동
+            if (cursors.left.isDown) {
+                player.body.setVelocityX(-160);
+            } else if (cursors.right.isDown) {
+                player.body.setVelocityX(160);
+            } else {
+                player.body.setVelocityX(0);
+            }
+
+            // 점프
+            if (cursors.space.isDown && player.body.touching.down) {
+                player.body.setVelocityY(-330);
+            }
+
+            // 슈팅 (Ctrl 키)
+            if (cursors.shift.isDown) {
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, ball.x, ball.y);
+                const velocity = 400;
+                ball.body.setVelocity(
+                    Math.cos(angle) * velocity,
+                    Math.sin(angle) * velocity
+                );
+            }
+        }
+
+        function goalScored(ball, goal) {
+            ball.setPosition(400, 300);
+            ball.body.setVelocity(0, 0);
+            score += 1;
+            scoreText.setText('Score: ' + score);
+        }
+    </script>
+</body>
+</html> 

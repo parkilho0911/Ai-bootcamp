@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>미니 축구 게임</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #2c3e50;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #87CEEB;
+        }
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #menu-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(44, 62, 80, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 2;
+        }
+        #player-select {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(44, 62, 80, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            z-index: 2;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            padding: 20px;
+            max-width: 800px;
+            margin-top: 20px;
+        }
+        .player-card {
+            background: #34495e;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .player-card:hover {
+            transform: scale(1.05);
+            background: #2c3e50;
+        }
+        .player-color {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 10px;
+        }
+        .skill-list {
+            font-size: 14px;
+            color: #bdc3c7;
+            margin-top: 10px;
+        }
+        .menu-button {
+            background: #3498db;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .menu-button:hover {
+            background: #2980b9;
+        }
+        .hidden {
+            display: none !important;
+        }
+        
+        .score-board {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 3;
+        }
+        
+        /* 슈팅 게이지 바 스타일 */
+        .power-gauge-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border-radius: 5px;
+            display: none;
+            z-index: 3;
+        }
+        .power-gauge {
+            display: flex;
+            gap: 3px;
+        }
+        .power-segment {
+            width: 30px;
+            height: 15px;
+            background: #ddd;
+            transition: background-color 0.1s;
+        }
+        .power-segment.active {
+            background: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-canvas"></div>
+        <div class="score-board">
+            <span id="player1-score">0</span> - <span id="player2-score">0</span>
+        </div>
+        <div class="power-gauge-container">
+            <div class="power-gauge">
+                <div class="power-segment"></div>
+                <div class="power-segment"></div>
+                <div class="power-segment"></div>
+                <div class="power-segment"></div>
+            </div>
+        </div>
+        <div id="menu-container">
+            <h1>미니 축구 게임</h1>
+            <button class="menu-button" onclick="startPlayerSelect()">게임 시작</button>
+            <button class="menu-button" onclick="showControls()">조작법</button>
+        </div>
+        <div id="player-select">
+            <h2>선수 선택</h2>
+            <div class="player-grid" id="player-grid"></div>
+        </div>
+    </div>
+    <script>
+        // 선수 데이터
+        const PLAYERS = {
+            mbappe: {
+                name: "킬리안 음바페",
+                country: "프랑스",
+                color: 0x3498db,
+                skills: ["초고속 스프린트", "정확한 슈팅"],
+                stats: { speed: 95, shooting: 88, dribble: 90 }
+            },
+            bellingham: {
+                name: "주드 벨링엄",
+                country: "잉글랜드",
+                color: 0xe74c3c,
+                skills: ["전방위 미드필더", "강력한 태클"],
+                stats: { speed: 85, shooting: 82, dribble: 88 }
+            },
+            messi: {
+                name: "리오넬 메시",
+                country: "아르헨티나",
+                color: 0x2ecc71,
+                skills: ["마법같은 드리블", "완벽한 왼발"],
+                stats: { speed: 88, shooting: 92, dribble: 96 }
+            },
+            ronaldo: {
+                name: "크리스티아누 호날두",
+                country: "포르투갈",
+                color: 0x9b59b6,
+                skills: ["강력한 슈팅", "높은 점프력"],
+                stats: { speed: 89, shooting: 93, dribble: 87 }
+            }
+        };
+
+        let selectedPlayer = null;
+        let selectedPlayer2 = null;
+        let game = null;
+        let shootingPower = 0;
+        let shootingPower2 = 0;
+        let shootingTimer = null;
+        let shootingTimer2 = null;
+        let isChargingShot = false;
+        let isChargingShot2 = false;
+        let player = null;
+        let player2 = null;
+        let ball = null;
+        let cursors = null;
+        let wasdKeys = null;
+        let score = { player1: 0, player2: 0 };
+        
+        function updateScoreboard() {
+            document.getElementById('player1-score').textContent = score.player1;
+            document.getElementById('player2-score').textContent = score.player2;
+            
+            // 승리 조건 체크
+            if (score.player1 >= 5) {
+                alert('Player 1 승리!');
+                resetGame();
+            } else if (score.player2 >= 5) {
+                alert('Player 2 승리!');
+                resetGame();
+            }
+        }
+        
+        function resetGame() {
+            score.player1 = 0;
+            score.player2 = 0;
+            updateScoreboard();
+            selectedPlayer = null;
+            selectedPlayer2 = null;
+            if (game) {
+                game.destroy(true);
+            }
+            document.getElementById('menu-container').style.display = 'flex';
+            document.getElementById('player-select').style.display = 'none';
+        }
+
+        function startPlayerSelect() {
+            console.log('선수 선택 시작');
+            document.getElementById('menu-container').style.display = 'none';
+            document.getElementById('player-select').style.display = 'flex';
+            
+            const playerGrid = document.getElementById('player-grid');
+            playerGrid.innerHTML = '';
+
+            Object.entries(PLAYERS).forEach(([id, player]) => {
+                const card = document.createElement('div');
+                card.className = 'player-card';
+                card.onclick = () => {
+                    if (!selectedPlayer) {
+                        selectedPlayer = PLAYERS[id];
+                        card.style.border = '3px solid #3498db';
+                        card.innerHTML += '<div style="color: #3498db; margin-top: 10px;">Player 1</div>';
+                    } else if (!selectedPlayer2) {
+                        selectedPlayer2 = PLAYERS[id];
+                        card.style.border = '3px solid #e74c3c';
+                        card.innerHTML += '<div style="color: #e74c3c; margin-top: 10px;">Player 2</div>';
+                        document.getElementById('player-select').style.display = 'none';
+                        document.getElementById('menu-container').style.display = 'none';
+                        startGame();
+                    }
+                };
+                
+                card.innerHTML = `
+                    <div class="player-color" style="background-color: #${player.color.toString(16)}"></div>
+                    <h3>${player.name}</h3>
+                    <p>${player.country}</p>
+                    <div class="skill-list">
+                        <p>스킬: ${player.skills.join(', ')}</p>
+                        <p>속도: ${player.stats.speed}</p>
+                        <p>슈팅: ${player.stats.shooting}</p>
+                        <p>드리블: ${player.stats.dribble}</p>
+                    </div>
+                `;
+                
+                playerGrid.appendChild(card);
+            });
+        }
+
+        function startGame() {
+            console.log('게임 시작');
+            
+            // 모든 메뉴 화면 숨기기
+            document.getElementById('menu-container').style.display = 'none';
+            document.getElementById('player-select').style.display = 'none';
+            
+            const gameConfig = {
+                type: Phaser.AUTO,
+                width: 800,
+                height: 600,
+                parent: 'game-canvas',
+                physics: {
+                    default: 'arcade',
+                    arcade: {
+                        gravity: { y: 300 },
+                        debug: false
+                    }
+                },
+                scene: {
+                    preload: preload,
+                    create: create,
+                    update: update
+                }
+            };
+
+            try {
+                if (game) {
+                    game.destroy(true);
+                }
+                game = new Phaser.Game(gameConfig);
+                console.log('새 게임 인스턴스 생성됨');
+            } catch (error) {
+                console.error('게임 생성 중 오류:', error);
+            }
+        }
+
+        function preload() {
+            // 게임 에셋 초기화
+            this.player = null;
+            this.ball = null;
+            this.cursors = null;
+        }
+
+        function create() {
+            console.log('create 함수 시작');
+            try {
+                const scene = this;
+                // 배경 설정
+                const sky = this.add.rectangle(400, 300, 800, 600, 0x87CEEB);
+                sky.setDepth(-1);
+                
+                // 잔디 바닥
+                const ground = this.add.rectangle(400, 550, 800, 100, 0x90EE90);
+                this.physics.add.existing(ground, true);
+                ground.setDepth(0);
+                
+                // 골대 (왼쪽)
+                const leftPost = this.add.rectangle(10, 450, 20, 200, 0xFFFFFF);
+                const leftBack = this.add.rectangle(0, 450, 20, 200, 0xFFFFFF);
+                const leftCross = this.add.rectangle(40, 350, 60, 20, 0xFFFFFF);
+                this.physics.add.existing(leftPost, true);
+                this.physics.add.existing(leftBack, true);
+                this.physics.add.existing(leftCross, true);
+                
+                // 골대 (오른쪽)
+                const rightPost = this.add.rectangle(790, 450, 20, 200, 0xFFFFFF);
+                const rightBack = this.add.rectangle(800, 450, 20, 200, 0xFFFFFF);
+                const rightCross = this.add.rectangle(760, 350, 60, 20, 0xFFFFFF);
+                this.physics.add.existing(rightPost, true);
+                this.physics.add.existing(rightBack, true);
+                this.physics.add.existing(rightCross, true);
+                
+                // 관중석 (위쪽 배경)
+                for(let i = 0; i < 8; i++) {
+                    const crowd = this.add.rectangle(100 + i * 100, 100, 80, 150, 0x4A4A4A);
+                    crowd.setDepth(-0.5);
+                }
+                
+                // 플레이어 생성
+                const playerGraphics = this.add.graphics();
+                playerGraphics.fillStyle(selectedPlayer ? selectedPlayer.color : 0xFF0000);
+                
+                // 머리
+                playerGraphics.fillCircle(0, -25, 12);
+                
+                // 몸통
+                playerGraphics.fillRect(-10, -15, 20, 30);
+                
+                // 다리
+                playerGraphics.fillRect(-10, 15, 8, 15);  // 왼쪽 다리
+                playerGraphics.fillRect(2, 15, 8, 15);    // 오른쪽 다리
+                
+                // 팔
+                playerGraphics.fillRect(-15, -10, 5, 20); // 왼팔
+                playerGraphics.fillRect(10, -10, 5, 20);  // 오른팔
+                
+                const playerTexture = playerGraphics.generateTexture('playerShape', 40, 60);
+                playerGraphics.destroy();
+                
+                this.player = this.physics.add.sprite(100, 450, 'playerShape');
+                player = this.player;  // 전역 변수에 할당
+                player.setCollideWorldBounds(true);
+                player.setBounce(0.2);
+                player.setDepth(1);
+                player.setSize(30, 55);  // 충돌 영역 조정
+                
+                // 선수 능력치 적용
+                if (selectedPlayer) {
+                    player.speed = selectedPlayer.stats.speed;
+                    player.shootingPower = selectedPlayer.stats.shooting;
+                    player.dribbleControl = selectedPlayer.stats.dribble;
+                }
+                
+                // 플레이어 2 생성
+                const player2Graphics = this.add.graphics();
+                player2Graphics.fillStyle(selectedPlayer2 ? selectedPlayer2.color : 0x00FF00);
+                
+                // 머리
+                player2Graphics.fillCircle(0, -25, 12);
+                // 몸통
+                player2Graphics.fillRect(-10, -15, 20, 30);
+                // 다리
+                player2Graphics.fillRect(-10, 15, 8, 15);
+                player2Graphics.fillRect(2, 15, 8, 15);
+                // 팔
+                player2Graphics.fillRect(-15, -10, 5, 20);
+                player2Graphics.fillRect(10, -10, 5, 20);
+                
+                const player2Texture = player2Graphics.generateTexture('player2Shape', 40, 60);
+                player2Graphics.destroy();
+                
+                this.player2 = this.physics.add.sprite(700, 450, 'player2Shape');
+                player2 = this.player2;
+                player2.setCollideWorldBounds(true);
+                player2.setBounce(0.2);
+                player2.setDepth(1);
+                player2.setSize(30, 55);
+                
+                // 컨트롤 설정
+                this.cursors = this.input.keyboard.createCursorKeys();
+                cursors = this.cursors;
+                
+                // WASD 키 설정
+                wasdKeys = {
+                    up: this.input.keyboard.addKey('W'),
+                    down: this.input.keyboard.addKey('S'),
+                    left: this.input.keyboard.addKey('A'),
+                    right: this.input.keyboard.addKey('D'),
+                    shoot: this.input.keyboard.addKey('H')
+                };
+                
+                // 공 생성
+                const ballGraphics = this.add.graphics();
+                ballGraphics.fillStyle(0xFFFFFF);
+                ballGraphics.fillCircle(20, 20, 20);
+                
+                // 공 무늬 추가
+                ballGraphics.lineStyle(2, 0x000000);
+                ballGraphics.beginPath();
+                ballGraphics.arc(20, 20, 20, 0, Math.PI * 2);
+                ballGraphics.moveTo(20, 0);
+                ballGraphics.lineTo(20, 40);
+                ballGraphics.moveTo(0, 20);
+                ballGraphics.lineTo(40, 20);
+                ballGraphics.strokePath();
+                
+                const ballTexture = ballGraphics.generateTexture('ballShape', 40, 40);
+                ballGraphics.destroy();
+                
+                this.ball = this.physics.add.sprite(400, 300, 'ballShape');
+                ball = this.ball;  // 전역 변수에 할당
+                ball.setCollideWorldBounds(true);
+                ball.setBounce(0.8);
+                ball.setDrag(50);
+                ball.setDepth(1);
+                ball.setCircle(20);
+                
+                // 충돌 설정
+                const objects = [ground, leftPost, leftBack, leftCross, rightPost, rightBack, rightCross];
+                objects.forEach(obj => {
+                    this.physics.add.collider(player, obj);
+                    this.physics.add.collider(player2, obj);
+                    this.physics.add.collider(ball, obj);
+                });
+                this.physics.add.collider(player, ball);
+                this.physics.add.collider(player2, ball);
+                this.physics.add.collider(player, player2);
+                
+                // Ctrl 키 이벤트 설정
+                const ctrlKey = this.input.keyboard.addKey('CTRL');
+                ctrlKey.on('down', () => {
+                    if (!isChargingShot) {
+                        isChargingShot = true;
+                        shootingPower = 0;
+                        shootingTimer = setInterval(updateShootingGauge, 200);
+                    }
+                });
+                
+                ctrlKey.on('up', () => {
+                    if (isChargingShot) {
+                        isChargingShot = false;
+                        clearInterval(shootingTimer);
+                        updateShootingGauge();
+                        
+                        // 공과 플레이어 사이의 거리 체크
+                        if (Phaser.Math.Distance.Between(player.x, player.y, ball.x, ball.y) < 70) {
+                            const angle = Phaser.Math.Angle.Between(player.x, player.y, ball.x, ball.y);
+                            const basePower = selectedPlayer ? selectedPlayer.stats.shooting * 10 : 800;
+                            const powerMultiplier = [0.7, 1.0, 1.4, 2.0][shootingPower - 1] || 0;
+                            const finalPower = basePower * powerMultiplier;
+                            
+                            ball.setVelocity(
+                                Math.cos(angle) * finalPower,
+                                Math.sin(angle) * finalPower
+                            );
+                            
+                            // 슈팅 효과음 (시각적 효과)
+                            const shotEffect = scene.add.circle(ball.x, ball.y, 20, 0xFFFF00, 0.7);
+                            scene.tweens.add({
+                                targets: shotEffect,
+                                scale: 2,
+                                alpha: 0,
+                                duration: 200,
+                                onComplete: () => shotEffect.destroy()
+                            });
+                        }
+                    }
+                });
+                
+                // H 키 이벤트 설정 (플레이어 2 슈팅)
+                wasdKeys.shoot.on('down', () => {
+                    if (!isChargingShot2) {
+                        isChargingShot2 = true;
+                        shootingPower2 = 0;
+                        shootingTimer2 = setInterval(updateShootingGauge2, 200);
+                    }
+                });
+                
+                wasdKeys.shoot.on('up', () => {
+                    if (isChargingShot2) {
+                        isChargingShot2 = false;
+                        clearInterval(shootingTimer2);
+                        updateShootingGauge2();
+                        
+                        // 공과 플레이어 사이의 거리 체크
+                        if (Phaser.Math.Distance.Between(player2.x, player2.y, ball.x, ball.y) < 70) {
+                            const angle = Phaser.Math.Angle.Between(player2.x, player2.y, ball.x, ball.y);
+                            const basePower = selectedPlayer2 ? selectedPlayer2.stats.shooting * 10 : 800;
+                            const powerMultiplier = [0.7, 1.0, 1.4, 2.0][shootingPower2 - 1] || 0;
+                            const finalPower = basePower * powerMultiplier;
+                            
+                            ball.setVelocity(
+                                Math.cos(angle) * finalPower,
+                                Math.sin(angle) * finalPower
+                            );
+                            
+                            // 슈팅 효과음 (시각적 효과)
+                            const shotEffect = scene.add.circle(ball.x, ball.y, 20, 0xFFFF00, 0.7);
+                            scene.tweens.add({
+                                targets: shotEffect,
+                                scale: 2,
+                                alpha: 0,
+                                duration: 200,
+                                onComplete: () => shotEffect.destroy()
+                            });
+                        }
+                    }
+                });
+                
+                // 골 감지 영역 생성
+                const leftGoalZone = this.add.rectangle(20, 450, 40, 200);
+                const rightGoalZone = this.add.rectangle(780, 450, 40, 200);
+                this.physics.add.existing(leftGoalZone, true);
+                this.physics.add.existing(rightGoalZone, true);
+                leftGoalZone.setAlpha(0);  // 투명하게 설정
+                rightGoalZone.setAlpha(0);
+                
+                // 골 감지
+                this.physics.add.overlap(ball, leftGoalZone, () => {
+                    score.player2++;
+                    updateScoreboard();
+                    const goalEffect = scene.add.circle(ball.x, ball.y, 50, 0xFFD700, 0.8);
+                    scene.tweens.add({
+                        targets: goalEffect,
+                        scale: 3,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => {
+                            goalEffect.destroy();
+                            ball.setPosition(400, 300);
+                            ball.setVelocity(0, 0);
+                        }
+                    });
+                });
+                
+                this.physics.add.overlap(ball, rightGoalZone, () => {
+                    score.player1++;
+                    updateScoreboard();
+                    const goalEffect = scene.add.circle(ball.x, ball.y, 50, 0xFFD700, 0.8);
+                    scene.tweens.add({
+                        targets: goalEffect,
+                        scale: 3,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => {
+                            goalEffect.destroy();
+                            ball.setPosition(400, 300);
+                            ball.setVelocity(0, 0);
+                        }
+                    });
+                });
+                
+                console.log('create 함수 완료');
+            } catch (error) {
+                console.error('create 함수 중 오류:', error);
+            }
+        }
+
+        function update() {
+            if (!player || !cursors || !player2 || !wasdKeys) return;
+            
+            try {
+                // 플레이어 1 이동
+                const speed = selectedPlayer ? selectedPlayer.stats.speed : 160;
+                if (cursors.left.isDown) {
+                    player.setVelocityX(-speed * 2);
+                    player.flipX = true;
+                } else if (cursors.right.isDown) {
+                    player.setVelocityX(speed * 2);
+                    player.flipX = false;
+                } else {
+                    player.setVelocityX(0);
+                }
+
+                // 플레이어 1 점프
+                if (cursors.up.isDown && player.body.touching.down) {
+                    const jumpPower = selectedPlayer ? -330 - (selectedPlayer.stats.speed * 0.5) : -330;
+                    player.setVelocityY(jumpPower);
+                }
+                
+                // 플레이어 2 이동
+                const speed2 = selectedPlayer2 ? selectedPlayer2.stats.speed : 160;
+                if (wasdKeys.left.isDown) {
+                    player2.setVelocityX(-speed2 * 2);
+                    player2.flipX = true;
+                } else if (wasdKeys.right.isDown) {
+                    player2.setVelocityX(speed2 * 2);
+                    player2.flipX = false;
+                } else {
+                    player2.setVelocityX(0);
+                }
+                
+                // 플레이어 2 점프
+                if (wasdKeys.up.isDown && player2.body.touching.down) {
+                    const jumpPower2 = selectedPlayer2 ? -330 - (selectedPlayer2.stats.speed * 0.5) : -330;
+                    player2.setVelocityY(jumpPower2);
+                }
+            } catch (error) {
+                console.error('update 함수 중 오류:', error);
+            }
+        }
+
+        function updateShootingGauge() {
+            const segments = document.querySelectorAll('.power-segment');
+            const gaugeContainer = document.querySelector('.power-gauge-container');
+            
+            if (isChargingShot) {
+                gaugeContainer.style.display = 'block';
+                shootingPower = (shootingPower + 1) % 5;  // 0-4 사이 순환
+                
+                segments.forEach((segment, index) => {
+                    if (index < shootingPower) {
+                        segment.classList.add('active');
+                    } else {
+                        segment.classList.remove('active');
+                    }
+                });
+            } else {
+                gaugeContainer.style.display = 'none';
+                segments.forEach(segment => segment.classList.remove('active'));
+            }
+        }
+
+        function updateShootingGauge2() {
+            const segments = document.querySelectorAll('.power-gauge .power-segment');
+            const gaugeContainer = document.querySelector('.power-gauge-container');
+            
+            if (isChargingShot2) {
+                gaugeContainer.style.display = 'block';
+                shootingPower2 = (shootingPower2 + 1) % 5;  // 0-4 사이 순환
+                
+                segments.forEach((segment, index) => {
+                    if (index < shootingPower2) {
+                        segment.classList.add('active');
+                    } else {
+                        segment.classList.remove('active');
+                    }
+                });
+            } else {
+                gaugeContainer.style.display = 'none';
+                segments.forEach(segment => segment.classList.remove('active'));
+            }
+        }
+
+        function showControls() {
+            alert('조작법:\nPlayer 1:\n- 방향키: 이동\n- 위 방향키: 점프\n- Ctrl: 슈팅 (길게 누를수록 강한 슈팅)\n\nPlayer 2:\n- WASD: 이동\n- W: 점프\n- H: 슈팅 (길게 누를수록 강한 슈팅)');
+        }
+    </script>
+</body>
+</html> 
