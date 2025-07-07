@@ -1,1 +1,1 @@
-# Ai-botcamp
+# Ai-bootcamp
